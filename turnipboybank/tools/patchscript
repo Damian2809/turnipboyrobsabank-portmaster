@@ -1,0 +1,66 @@
+#!/bin/bash
+# Set GAMEDIR to the current directory and set logfile
+GAMEDIR="$PWD"
+LOGFILE="$GAMEDIR/patchlog.txt"
+
+# Redirect output and error to the log file
+exec > >(tee -a "$LOGFILE") 2>&1
+echo "GAMEDIR is set to: $GAMEDIR"
+
+# Exports
+export DATADIR="$GAMEDIR/assets"
+export LD_LIBRARY_PATH="/usr/lib:$GAMEDIR/lib:$GAMEDIR/tools/libs:$LD_LIBRARY_PATH"
+export SDL_GAMECONTROLLERCONFIG="$sdl_controllerconfig"
+export TOOLDIR="$GAMEDIR/tools"
+export TMPDIR="$GAMEDIR/tmp"
+export PATH="$GAMEDIR/tools:$PATH"
+
+# Permissions
+chmod 666 /dev/uinput
+chmod 777 "$TOOLDIR/gmKtool.py"
+chmod 777 "$TOOLDIR/oggenc"
+
+cd "$GAMEDIR"
+
+extract_and_merge_apks() {
+    mkdir -p "$GAMEDIR/extracted_apks"
+    mkdir -p "$GAMEDIR/merged_apk"
+	APKS_FILE=$(find "$GAMEDIR/gamedata" -name "*.apks")
+
+	unzip -q "APKS_FILE" -d "$GAMEDIR/gamedata"
+	rm "APKS_FILE"
+    # Find all APKs in gamedata and extract them
+    echo "Extracting APKs from $GAMEDIR/gamedata..."
+    APK_LIST=$(find "$GAMEDIR/gamedata" -name "*.apk")
+    
+    if [ -z "$APK_LIST" ]; then
+        echo "No APKs found in gamedata!"
+        exit 1
+    fi
+    
+    for APK in $APK_LIST; do
+        APK_NAME=$(basename "$APK" .apk)
+        mkdir -p "$GAMEDIR/extracted_apks/$APK_NAME"
+        unzip -q "$APK" -d "$GAMEDIR/extracted_apks/$APK_NAME"
+    done
+    
+    # Merge extracted content into a new APK directory
+    cp -r "$GAMEDIR/extracted_apks"/*/* "$GAMEDIR/merged_apk/"
+    
+    # Create the final APK file
+    cd "$GAMEDIR/merged_apk"
+    zip -r "$GAMEDIR/turnip.port" .
+    echo "Final merged APK created at $GAMEDIR/turnip.port"
+}
+
+process_game() {
+    echo "Extracting and merging APKs..."
+    extract_and_merge_apks
+    sleep 1
+    
+    # Final completion message
+    echo "APK extraction and merging process complete!"
+}
+
+# Call the function
+process_game
